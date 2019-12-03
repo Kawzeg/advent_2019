@@ -1,5 +1,4 @@
-use std::pin::Pin;
-
+use std::collections::HashMap;
 use std::cmp::{max, min};
 use std::io;
 
@@ -196,6 +195,66 @@ fn part_1() -> io::Result<()> {
     Ok(())
 }
 
+fn find_crossings(field: &mut Vec<Vec<u8>>, v: &Visited, origin: (i32, i32), crossings: &mut HashMap<(i32, i32), i32>) {
+    for (i, p) in v.iter().enumerate() {
+        if i == 0 { continue; } // Skip origin
+        let x = (p.0 + origin.0) as usize;
+        let y = (p.1 + origin.1) as usize;
+        if field[x][y] <= 2 {
+            continue;
+        }
+        let c = crossings.entry(*p).or_insert(0);
+        *c += i as i32;
+        println!("Found crossing at {:?} with {} steps", (x, y), *c);
+    }
+}
+
 fn main() -> io::Result<()> {
+    let file = "./resources/input";
+    let input = std::fs::read_to_string(file)?;
+    //let input = "R75,D30,R83,U83,L12,D49,R71,U7,L72\nU62,R66,U55,R34,D71,R55,D58,R83"; // 610 works
+    //let input = "R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51\nU98,R91,D20,R16,D67,R40,U7,R15,U6,R7"; // 410 works
+
+    let wires: Vec<&str> = input.split("\n").collect();
+    let wire0: Vec<&str> = wires[0].split(",").collect();
+    let wire1: Vec<&str> = wires[1].split(",").collect();
+    let v1 = run_through(&wire0);
+    let v2 = run_through(&wire1);
+    let bounds1 = bounds(&v1);
+    let bounds2 = bounds(&v2);
+    println!("Bounds 1: {:?}", bounds1);
+    println!("Bounds 2: {:?}", bounds2);
+    let min_x = min(bounds1.0, bounds2.0);
+    let min_y = min(bounds1.1, bounds2.1);
+    let max_x = max(bounds1.2, bounds2.2);
+    let max_y = max(bounds1.3, bounds2.3);
+    let width: usize = (max_x - min_x) as usize;
+    let height: usize = (max_y - min_y) as usize;
+    let mut field: Vec<Vec<u8>> = vec![vec![0; height + 1]; width + 1];
+
+    let origin1 = (bounds1.0.abs(), bounds1.1.abs());
+    let origin2 = (bounds2.0.abs(), bounds2.1.abs());
+    let origin = (max(origin1.0, origin2.0), max(origin1.1, origin2.1));
+    println!("1: {:?} 2: {:?}", origin1, origin2);
+    println!("Origin: {:?}", origin);
+
+    println!("At origin: {}", field[origin.0 as usize][origin.1 as usize]);
+    add_wire(&mut field, &v1, origin, 0);
+    println!("At origin: {}", field[origin.0 as usize][origin.1 as usize]);
+    add_wire(&mut field, &v2, origin, 1);
+    println!("At origin: {}", field[origin.0 as usize][origin.1 as usize]);
+
+    let mut crossings : HashMap<(i32,i32), i32>= HashMap::new();
+    find_crossings(&mut field, &v1, origin, &mut crossings);
+    find_crossings(&mut field, &v2, origin, &mut crossings);
+
+    let mut min_steps = std::i32::MAX;
+    for c in crossings {
+        if c.1 < min_steps {
+            min_steps = c.1
+        }
+    }
+    println!("Min steps crossing: {}", min_steps);
+
     Ok(())
 }
