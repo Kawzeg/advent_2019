@@ -9,6 +9,10 @@ enum Op {
     Mul,
     Read,
     Write,
+    JumpIfTrue,
+    JumpIfFalse,
+    LessThan,
+    Equals,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -79,6 +83,10 @@ impl Intcode {
             2 => Op::Mul,
             3 => Op::Read,
             4 => Op::Write,
+            5 => Op::JumpIfTrue,
+            6 => Op::JumpIfFalse,
+            7 => Op::LessThan,
+            8 => Op::Equals,
             _ => {
                 panic!("UNKNOWN OP CODE {}", code);
             }
@@ -89,7 +97,7 @@ impl Intcode {
         let opcode = code % 100;
         let op = Self::map_opcode(opcode);
         let args: Vec<Arg> = match op {
-            Op::Add | Op::Mul => {
+            Op::Add | Op::Mul | Op::LessThan | Op::Equals => {
                 let modes = self.param_modes();
                 let values = [self.arg(1), self.arg(2), self.arg(3)];
                 modes
@@ -104,6 +112,13 @@ impl Intcode {
             Op::Read | Op::Write => vec![Arg {
                 value: self.arg(1),
                 mode: Self::param_mode(code, 100),
+            }],
+            Op::JumpIfFalse | Op::JumpIfTrue => vec![Arg {
+                value: self.arg(1),
+                mode: Self::param_mode(code, 100)
+            }, Arg {
+                value: self.arg(2),
+                mode: Self::param_mode(code, 1000)
             }],
             Op::Stop => vec![],
         };
@@ -127,6 +142,22 @@ fn add(val1: i32, val2: i32) -> i32 {
 
 fn mul(val1: i32, val2: i32) -> i32 {
     val1 * val2
+}
+
+fn less_than(val1: i32, val2: i32) -> i32 {
+    if val1 < val2 {
+        1
+    } else {
+        0
+    }
+}
+
+fn equals(val1: i32, val2: i32) -> i32 {
+    if val1 == val2 {
+        1
+    } else {
+        0
+    }
 }
 
 fn do_op(code: Intcode, op: fn(i32, i32) -> i32) -> Intcode {
@@ -161,6 +192,19 @@ fn write(code: Intcode) -> Intcode {
     new_code
 }
 
+fn jump_if_con(code: Intcode, con: fn(i32) -> bool) -> Intcode {
+    let args = code.op().args;
+    let val = code.arg_to_val(args[0]);
+    let new_pos: usize = if con(val) {
+        code.arg_to_val(args[1]) as usize
+    } else {
+        code.pos + 3
+    };
+    let mut new_code = Intcode::new(code);
+    new_code.pos = new_pos;
+    new_code
+}
+
 pub fn run(input: Intcode) -> Intcode {
     let mut code = input;
     loop {
@@ -173,8 +217,12 @@ pub fn run(input: Intcode) -> Intcode {
             Op::Stop => break,
             Op::Add => do_op(code, add),
             Op::Mul => do_op(code, mul),
+            Op::LessThan => do_op(code, less_than),
+            Op::Equals => do_op(code, equals),
             Op::Read => read(code),
             Op::Write => write(code),
+            Op::JumpIfTrue => jump_if_con(code, |x| {x != 0}),
+            Op::JumpIfFalse => jump_if_con(code, |x| {x == 0}),
         };
     }
     code
