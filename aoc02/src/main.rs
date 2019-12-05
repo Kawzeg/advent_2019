@@ -74,7 +74,7 @@ fn run_once(input: Intcode) -> Intcode {
     }
 }
 
-fn run(input: Intcode) -> Intcode {
+pub fn run(input: Intcode) -> Intcode {
     let mut output = input;
     loop {
         let r_loc = output.arg(3);
@@ -107,7 +107,7 @@ fn intcode_from_file<P: AsRef<Path>>(file: P) -> io::Result<Intcode> {
     Ok(Intcode { data: ints, pos: 0 })
 }
 
-fn run_with_param(code: &Intcode, noun: usize, verb: usize) -> usize {
+pub fn run_with_param(code: &Intcode, noun: usize, verb: usize) -> usize {
     let mut new_data = code.data.clone();
     new_data[1] = noun;
     new_data[2] = verb;
