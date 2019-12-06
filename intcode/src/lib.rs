@@ -37,7 +37,7 @@ struct Operation {
 pub struct Intcode {
     pos: usize,
     data: Vec<i32>,
-    input: VecDeque<i32>,
+    input: Vec<i32>,
     output: Vec<i32>,
 }
 impl Intcode {
@@ -45,7 +45,7 @@ impl Intcode {
         Intcode {
             pos: 0,
             data: data,
-            input: VecDeque::new(),
+            input: Vec::new(),
             output: Vec::new(),
         }
     }
@@ -173,13 +173,12 @@ fn do_op(code: Intcode, op: fn(i32, i32) -> i32) -> Intcode {
 }
 
 fn read(code: Intcode) -> Intcode {
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).expect("Failed to read stdin");
-    let r = input.trim().parse::<i32>().unwrap();
+    let r = code.input[0];
     let r_loc = code.arg(1);
     let mut new_code = Intcode::new(code);
     new_code.data[r_loc as usize] = r;
     new_code.pos += 2;
+    new_code.input = new_code.input[1..].to_vec();
     new_code
 }
 
@@ -188,6 +187,7 @@ fn write(code: Intcode) -> Intcode {
     let val = code.arg_to_val(args[0]);
     let mut new_code = Intcode::new(code);
     println!("Intcode says: {}", val);
+    new_code.output.push(val);
     new_code.pos += 2;
     new_code
 }
@@ -247,8 +247,9 @@ fn run_with_param(code: &Intcode, noun: i32, verb: i32) -> i32 {
     output.data[0]
 }
 
-fn run_with_io(code: Intcode, input: Vec<i32>) -> Vec<i32> {
-    vec![]
+pub fn run_with_io(mut code: Intcode, input: Vec<i32>) -> Vec<i32> {
+    code.input = input;
+    run(code).output
 }
 
 #[cfg(test)]
