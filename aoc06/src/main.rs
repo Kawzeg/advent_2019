@@ -1,11 +1,41 @@
 use std::io;
 use std::collections::HashMap;
 
-fn count_orbits(orbits: &HashMap<&str, &str>, start: &str) -> i32{
+fn count_orbits(orbits: &HashMap<&str, &str>, start: &str) -> i32 {
     if start == "COM" {
         0
     } else {
         1 + count_orbits(orbits, orbits.get(start).unwrap())
+    }
+}
+
+fn all_orbits(orbits: &HashMap<&str, &str>, start: &str) -> Vec<String> {
+    if start == "COM" {
+        vec!["COM".to_string()]
+    } else {
+        let mut partial = all_orbits(orbits, orbits.get(start).unwrap());
+        partial.push(start.to_string());
+        partial
+    }
+}
+
+fn find_root(start_orbits: &Vec<String>, end_orbits: &Vec<String>) -> String {
+    let mut last_common = &start_orbits[0];
+    for (a, b) in start_orbits.iter().zip(end_orbits.iter()) {
+        if a == b {
+            last_common = a;
+        } else {
+            break;
+        }
+    }
+    last_common.to_string()
+}
+
+fn orbits_to_root(orbits: &HashMap<&str, &str>, start: &str, root: &str) -> i32{
+    if start == root {
+        0
+    } else {
+        1 + orbits_to_root(orbits, orbits.get(start).unwrap(), root)
     }
 }
 
@@ -21,7 +51,6 @@ fn main() -> io::Result<()> {
         let orbiter = split[1];
         orbits.insert(orbiter, orbitee);
     }
-    println!("TFG has {} orbits", count_orbits(&orbits, "TFG"));
     println!("Found {} orbits", orbits.len());
 
     let mut total_orbits = 0;
@@ -29,5 +58,13 @@ fn main() -> io::Result<()> {
         total_orbits += count_orbits(&orbits, orbit);
     }
     println!("Total orbits: {}", total_orbits);
+    let YOU = all_orbits(&orbits, "YOU");
+    let SAN = all_orbits(&orbits, "SAN");
+    println!("YOUr orbits: {:?}", all_orbits(&orbits, "YOU"));
+    let root = find_root(&YOU, &SAN);
+    println!("Root: {}", root);
+    let you_root = orbits_to_root(&orbits, "YOU", &root) - 1;
+    let san_root = orbits_to_root(&orbits, "SAN", &root) - 1;
+    println!("Jumps: {}", you_root + san_root);
     Ok(())
 }
