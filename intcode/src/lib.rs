@@ -23,7 +23,7 @@ enum ParameterMode {
 
 #[derive(Debug, Clone, Copy)]
 struct Arg {
-    value: i32,
+    value: i64,
     mode: ParameterMode,
 }
 
@@ -33,20 +33,22 @@ struct Operation {
     args: Vec<Arg>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Intcode {
     pos: usize,
-    data: Vec<i32>,
-    input: Vec<i32>,
-    output: Vec<i32>,
+    pub data: Vec<i64>,
+    input: Vec<i64>,
+    pub output: Vec<i64>,
+    pub halted: bool
 }
 impl Intcode {
-    fn from_data(data: Vec<i32>) -> Intcode {
+    pub fn from_data(data: Vec<i64>) -> Intcode {
         Intcode {
             pos: 0,
             data: data,
             input: Vec::new(),
             output: Vec::new(),
+            halted: false,
         }
     }
     fn new(other: Intcode) -> Intcode {
@@ -55,15 +57,16 @@ impl Intcode {
             data: other.data,
             input: other.input,
             output: other.output,
+            halted: other.halted,
         }
     }
-    fn deref(&self, at: usize) -> i32 {
+    fn deref(&self, at: usize) -> i64 {
         self.data[at]
     }
-    fn arg(&self, offset: usize) -> i32 {
+    fn arg(&self, offset: usize) -> i64 {
         self.data[self.pos + offset]
     }
-    fn param_mode(op: i32, shift: i32) -> ParameterMode {
+    fn param_mode(op: i64, shift: i64) -> ParameterMode {
         match (op / shift) % 10 {
             1 => ParameterMode::Immediate,
             0 => ParameterMode::Position,
@@ -76,7 +79,7 @@ impl Intcode {
         let mode3 = Self::param_mode(self.arg(0), 10000);
         [mode1, mode2, mode3]
     }
-    fn map_opcode(code: i32) -> Op {
+    fn map_opcode(code: i64) -> Op {
         match code {
             99 => Op::Stop,
             1 => Op::Add,
@@ -128,7 +131,7 @@ impl Intcode {
         }
     }
 
-    fn arg_to_val(&self, arg: Arg) -> i32 {
+    fn arg_to_val(&self, arg: Arg) -> i64 {
         match arg.mode {
             ParameterMode::Immediate => arg.value,
             ParameterMode::Position => self.deref(arg.value as usize),
@@ -136,15 +139,15 @@ impl Intcode {
     }
 }
 
-fn add(val1: i32, val2: i32) -> i32 {
+fn add(val1: i64, val2: i64) -> i64 {
     val1 + val2
 }
 
-fn mul(val1: i32, val2: i32) -> i32 {
+fn mul(val1: i64, val2: i64) -> i64 {
     val1 * val2
 }
 
-fn less_than(val1: i32, val2: i32) -> i32 {
+fn less_than(val1: i64, val2: i64) -> i64 {
     if val1 < val2 {
         1
     } else {
@@ -152,7 +155,7 @@ fn less_than(val1: i32, val2: i32) -> i32 {
     }
 }
 
-fn equals(val1: i32, val2: i32) -> i32 {
+fn equals(val1: i64, val2: i64) -> i64 {
     if val1 == val2 {
         1
     } else {
@@ -160,7 +163,7 @@ fn equals(val1: i32, val2: i32) -> i32 {
     }
 }
 
-fn do_op(code: Intcode, op: fn(i32, i32) -> i32) -> Intcode {
+fn do_op(code: Intcode, op: fn(i64, i64) -> i64) -> Intcode {
     let args = code.op().args;
     let val1 = code.arg_to_val(args[0]);
     let val2 = code.arg_to_val(args[1]);
@@ -192,7 +195,7 @@ fn write(code: Intcode) -> Intcode {
     new_code
 }
 
-fn jump_if_con(code: Intcode, con: fn(i32) -> bool) -> Intcode {
+fn jump_if_con(code: Intcode, con: fn(i64) -> bool) -> Intcode {
     let args = code.op().args;
     let val = code.arg_to_val(args[0]);
     let new_pos: usize = if con(val) {
@@ -208,18 +211,24 @@ fn jump_if_con(code: Intcode, con: fn(i32) -> bool) -> Intcode {
 pub fn run(input: Intcode) -> Intcode {
     let mut code = input;
     loop {
-        println!(
-            "[{:?}]",
-            code.op()
-        );
-
         code = match code.op().opcode {
-            Op::Stop => break,
+            Op::Stop => {
+                println!("HALT");
+                code.halted = true;
+                break;
+            },
             Op::Add => do_op(code, add),
             Op::Mul => do_op(code, mul),
             Op::LessThan => do_op(code, less_than),
             Op::Equals => do_op(code, equals),
-            Op::Read => read(code),
+            Op::Read => {
+                // If no input is available, halt
+                if code.input.len() > 0 {
+                    read(code)
+                } else {
+                    break;
+                }
+            },
             Op::Write => write(code),
             Op::JumpIfTrue => jump_if_con(code, |x| {x != 0}),
             Op::JumpIfFalse => jump_if_con(code, |x| {x == 0}),
@@ -230,7 +239,7 @@ pub fn run(input: Intcode) -> Intcode {
 
 pub fn intcode_from_file<P: AsRef<Path>>(file: P) -> io::Result<Intcode> {
     let data = std::fs::read_to_string(file)?;
-    let ints: Vec<i32> = data
+    let ints: Vec<i64> = data
         .trim_end()
         .split(",")
         .map(|x| x.to_string().parse().unwrap())
@@ -238,18 +247,10 @@ pub fn intcode_from_file<P: AsRef<Path>>(file: P) -> io::Result<Intcode> {
     Ok(Intcode::from_data(ints))
 }
 
-fn run_with_param(code: &Intcode, noun: i32, verb: i32) -> i32 {
-    let mut new_data = code.data.clone();
-    new_data[1] = noun;
-    new_data[2] = verb;
-    let input = Intcode::from_data(new_data);
-    let output = run(input);
-    output.data[0]
-}
-
-pub fn run_with_io(mut code: Intcode, input: Vec<i32>) -> Vec<i32> {
-    code.input = input;
-    run(code).output
+pub fn run_with_io(code: &Intcode, input: Vec<i64>) -> Intcode {
+    let mut copy = code.clone();
+    copy.input = input;
+    run(copy)
 }
 
 #[cfg(test)]
