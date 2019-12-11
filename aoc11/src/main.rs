@@ -109,7 +109,7 @@ fn run_once(world: &World) -> World{
     }
 }
 
-fn run(world: World) {
+fn run(world: World) -> Field{
     let mut new_world = world;
     loop {
         new_world = run_once(&new_world);
@@ -121,6 +121,33 @@ fn run(world: World) {
             break;
         }
     }
+    return new_world.field;
+}
+
+fn bounds(visited: &Vec<&(i32,i32)>) -> (i32, i32, i32, i32) {
+    let mut min_x = 0;
+    let mut max_x = 0;
+    let mut min_y = 0;
+    let mut max_y = 0;
+    for (x, y) in visited {
+        if *x < min_x {
+            min_x = *x;
+        }
+        if *x > max_x {
+            max_x = *x;
+        }
+        if *y < min_y {
+            min_y = *y;
+        }
+        if *y > max_y {
+            max_y = *y;
+        }
+    }
+    (min_x, min_y, max_x, max_y)
+}
+
+fn xy_index(x: i32, y: i32, width: i32) -> usize {
+    (y*width + x) as usize
 }
 
 fn main() -> io::Result<()> {
@@ -128,7 +155,8 @@ fn main() -> io::Result<()> {
     let brain = intcode_from_file(file)?;
 
     let start_coords: (i32, i32) = (0, 0);
-    let painted_tiles: Field = HashMap::new();
+    let mut painted_tiles: Field = HashMap::new();
+    painted_tiles.insert((0,0), 1);
     let start_direction = Direction::Up;
     let world = World {
         dir: start_direction,
@@ -137,6 +165,25 @@ fn main() -> io::Result<()> {
         brain: brain,
     };
 
-    run(world);
+    let paints = run(world);
+    println!("Done: {:?}", paints);
+    let bounds = bounds(&paints.keys().collect());
+    println!("Bounds: {:?}", bounds);
+    let width = bounds.2 - bounds.0;
+    let height = bounds.3 - bounds.1;
+    let mut image = vec![0;(width*height) as usize];
+
+    for y in 0..height+1 {
+        print!("||| ");
+        for x in 0..width+1 {
+            let c = get_color(&paints, (x, -y));
+            if c == 0 {
+                print!(" ");
+            } else {
+                print!("█");
+            }
+        }
+        print!("|||\n");
+    }
     Ok(())
 }
