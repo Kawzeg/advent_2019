@@ -108,6 +108,65 @@ fn create_input_ex_b(world: &mut World) {
     create_moon(world, (9, -8, -3));
 }
 
+type Vector = Vec<(i64, i64)>;
+
+fn run(xs: Vector) -> Vector {
+    let mut out = xs.clone();
+    for (i, x) in xs.iter().enumerate() {
+        let mut new_x = x.1;
+        for y in &xs {
+            if x == y {
+                continue;
+            }
+            new_x += norm(y.0 - x.0);
+        }
+        out[i] = (x.0, new_x);
+    }
+    let size = out.len();
+    for i in 0..size {
+        out[i].0 += out[i].1;
+    }
+    out
+}
+
+fn period(xs: (i64, i64, i64, i64)) -> i64 {
+    let mut v = vec![];
+    v.push((xs.0, 0));
+    v.push((xs.1, 0));
+    v.push((xs.2, 0));
+    v.push((xs.3, 0));
+    let first = v.clone();
+    let mut i = 0;
+    loop {
+        i += 1;
+        println!("V={:?}", v);
+        v = run(v);
+        if v == first {
+            return i;
+        }
+    }
+}
+
+use std::cmp::{max, min};
+ 
+fn gcd(a: i64, b: i64) -> i64 {
+    match ((a, b), (a & 1, b & 1)) {
+        ((x, y), _) if x == y => y,
+        ((0, x), _) | ((x, 0), _) => x,
+        ((x, y), (0, 1)) | ((y, x), (1, 0)) => gcd(x >> 1, y),
+        ((x, y), (0, 0)) => gcd(x >> 1, y >> 1) << 1,
+        ((x, y), (1, 1)) => {
+            let (x, y) = (min(x, y), max(x, y));
+            gcd((y - x) >> 1, x)
+        }
+        _ => unreachable!(),
+    }
+}
+ 
+fn lcm(a: i64, b: i64) -> i64 {
+    a * b / gcd(a, b)
+}
+
 fn main() {
     let mut world = World::new();
     world.register::<Position>();
@@ -128,5 +187,20 @@ fn main() {
         dispatcher.dispatch(&mut world);
         world.maintain();
     }
+
+    let xs = (15, -5, 0, 5);
+    let ys = (-2, -4, -6, 9);
+    let zs = (-6, -11, 0, 6);
+    let p1 = period(xs);
+    let p2 = period(ys);
+    let p3 = period(zs);
+    println!("Period of {:?} is {}", xs, p1);
+    println!("Period of {:?} is {}", ys, p2);
+    println!("Period of {:?} is {}", zs, p3);
+    let x = lcm(p1, p2);
+    println!("lcm(1,2) = {}", x);
+    let result = lcm(x, p3);
+    println!("lcm(x, 3) = {}", result);
+
     println!("Hello, world!");
 }
