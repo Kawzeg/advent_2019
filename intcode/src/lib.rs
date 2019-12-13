@@ -38,7 +38,7 @@ struct Operation {
 pub struct Intcode {
     pos: usize,
     rel_base: usize,
-    data: Vec<i64>,
+    pub data: Vec<i64>,
     input: Vec<i64>,
     pub output: Vec<i64>,
     pub halted: bool
@@ -69,7 +69,7 @@ impl Intcode {
             println!("Trying to deref outside memory");
             0
         } else {
-            println!("deref@{}={}", at, self.data[at]);
+            //println!("deref@{}={}", at, self.data[at]);
             self.data[at]
         }
     }
@@ -152,12 +152,12 @@ impl Intcode {
         if addr >= self.data.len() {
             self.data.extend(vec![0; addr - self.data.len() + 1]);
         }
-        println!("write@{}:={}", addr, val);
+        //println!("write@{}:={}", addr, val);
         self.data[addr] = val;
     }
 
     fn arg_to_val(&self, arg: Arg) -> i64 {
-        println!("Getting arg {:?} from base {}", arg, self.rel_base);
+        //println!("Getting arg {:?} from base {}", arg, self.rel_base);
         match arg.mode {
             ParameterMode::Immediate => arg.value,
             ParameterMode::Position => self.deref(arg.value as usize),
@@ -246,7 +246,7 @@ fn adjust_rel_base(code: Intcode) -> Intcode {
 pub fn run(input: &Intcode) -> Intcode {
     let mut code = input.clone();
     loop {
-        println!("Running {:?}", code.op());
+        //println!("Running {:?}", code.op());
         code = match code.op().opcode {
             Op::Stop => {
                 println!("HALT");
