@@ -302,5 +302,7 @@ fn main() -> io::Result<()> {
     let distance = goal_map.tiles[middle];
     display(&map, x, y);
     println!("Distance is: {}", distance);
+    let max_distance = goal_map.tiles.iter().filter(|x| {**x < std::i64::MAX}).max().unwrap();
+    println!("Max distance is: {}", max_distance);
     Ok(())
 }
