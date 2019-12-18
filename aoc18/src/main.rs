@@ -4,54 +4,11 @@ use std::collections::HashMap;
 use std::collections::BinaryHeap;
 
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz";
-const DOORS: &str = "ABCDEFGHIJKLMNOPQRSTuVWXYZ";
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 struct State {
     keys: Vec<char>, // Collected keys
     i: usize, // Position in the map vector
-    map: Map<char>, // Updated map with opened doors
-}
-
-#[derive(Debug)]
-enum Direction {
-    North,
-    East,
-    South,
-    West,
-}
-
-fn dir_to_int(d: Direction) -> i64 {
-    match d {
-        Direction::North => 1,
-        Direction::South => 2,
-        Direction::West => 3,
-        Direction::East => 4,
-    }
-}
-
-#[derive(Debug)]
-enum Response {
-    Wall,
-    Moved,
-    FoundSystem,
-}
-
-fn int_to_res(r: i64) -> Response {
-    match r {
-        0 => Response::Wall,
-        1 => Response::Moved,
-        2 => Response::FoundSystem,
-        _ => panic!("Unknown response {}", r),
-    }
-}
-
-#[derive(PartialEq, Debug, Clone)]
-enum TileType {
-    Floor,
-    Wall,
-    OxygenSystem,
-    Unknown,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -120,80 +77,32 @@ fn get_neighbour_list(n: Neighbours) -> Vec<(i64, usize)> {
         }).collect()
 }
 
-fn get_min_neighour(map: &Map<i64>, i: usize) -> (i64, usize) {
-    let n = get_neighbours(map, i);
-    let n_vec = vec![n.north, n.south, n.east, n.west];
-    n_vec
-        .iter()
-        .filter_map(|x| match x {
-            Some((v, i)) => Some((*v, *i)),
-            None => None,
-        })
-        .min()
-        .unwrap()
-}
-
-fn is_wall(tile: char) -> bool {
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".contains(tile)
-}
-
-fn iterate_dijk_step(map: &Map<char>, dijk_map: &mut Map<i64>, dirties: Vec<usize>) -> (i64, Vec<usize>) {
-    let mut r = 0;
-    let mut new_dirties = vec![];
-    for i in dirties {
-        let neighbours = get_neighbours(dijk_map, i);
-        let ns = get_neighbour_list(neighbours);
-        for (x, n_i) in ns {
-            if is_wall(map.tiles[n_i]) {
-                continue;
-            }
-            if x > dijk_map.tiles[i] + 1 {
-                dijk_map.tiles[n_i] = dijk_map.tiles[i] + 1;
-                new_dirties.push(n_i);
-                r += 1;
-            }
-        }
+fn is_wall(tile: char, keys: &Vec<char>) -> bool {
+    if keys.contains(&tile.to_ascii_lowercase()) {
+        false
+    } else {
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".contains(tile)
     }
-    (r, new_dirties)
 }
 
-fn build_dijk_step(map: &Map<char>, dijk: &Map<i64>) -> (i64, Map<i64>, Vec<usize>) {
-    let mut r = 0;
-    let mut new_dijk = dijk.clone();
-    let mut dirties = vec![];
-    for (i, tile) in map.tiles.iter().enumerate() {
-        if is_wall(*tile) {
-            continue;
-        }
-        let min = get_min_neighour(dijk, i).0;
-        if min < dijk.tiles[i] - 1 {
-            dirties.push(i);
-            new_dijk.tiles[i] = min + 1;
-            r += 1;
-        }
-    }
-    //println!("Changed {} tiles", r);
-    (r, new_dijk, dirties)
-}
-
-fn neighbour_list(map: &Map<char>, i: usize) -> Vec<usize> {
+fn neighbour_list(map: &Map<char>, i: usize, keys: &Vec<char>) -> Vec<usize> {
     let mut r = vec![];
-    if i > map.width && !is_wall(map.tiles[i - map.width]){
+    if i > map.width && !is_wall(map.tiles[i - map.width], keys){
         r.push(i - map.width);
     }
-    if i < map.tiles.len() - map.width && !is_wall(map.tiles[i + map.width]) {
+    if i < map.tiles.len() - map.width && !is_wall(map.tiles[i + map.width], keys) {
         r.push(i + map.width);
     }
-    if i % map.width > 0 && !is_wall(map.tiles[i - 1]){
+    if i % map.width > 0 && !is_wall(map.tiles[i - 1], keys){
         r.push(i - 1);
     }
-    if i % map.width < map.width - 1 && !is_wall(map.tiles[i + 1]){
+    if i % map.width < map.width - 1 && !is_wall(map.tiles[i + 1], keys){
         r.push(i + 1);
     }
     r
 }
 
-fn dijkstra(map: &Map<char>, start: char, target: char) -> Option<i64> {
+fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Option<i64> {
     if let None = get_index(map, target) {
         return None;
     }
@@ -204,7 +113,7 @@ fn dijkstra(map: &Map<char>, start: char, target: char) -> Option<i64> {
     to_visit.push((i, 0));
     distances.insert(i, 0);
     while let Some((i, cost)) = to_visit.pop() {
-        let neighbours = neighbour_list(map, i);
+        let neighbours = neighbour_list(map, i, keys);
         for n in neighbours {
             let new_distance = cost + 1;
             let is_shorter = distances.get(&n).map_or(true, |&current| new_distance < current);
@@ -218,34 +127,6 @@ fn dijkstra(map: &Map<char>, start: char, target: char) -> Option<i64> {
         }
     }
     distances.get(&target_i).map(|x| *x)
-}
-
-fn build_map(map: &Map<char>, target: char) -> Map<i64> {
-    let dijk_tiles: Vec<i64> = vec![std::i64::MAX; map.tiles.len()];
-    let mut dijk_map = Map {
-        width: map.width,
-        height: map.height,
-        tiles: dijk_tiles,
-    };
-    for (i, tile) in map.tiles.iter().enumerate() {
-        if *tile == target {
-            dijk_map.tiles[i] = 0;
-        }
-    }
-    let mut i = 1;
-    let x = build_dijk_step(map, &dijk_map);
-    let mut changed = x.0;
-    let mut dijk_map = x.1;
-    let mut dirties = x.2;
-    while changed != 0 {
-        let x = iterate_dijk_step(&map, &mut dijk_map, dirties);
-        changed = x.0;
-        dirties = x.1;
-        i += 1;
-        //println!("Changed {}", changed);
-    }
-    //println!("Took {} iterations", i);
-    dijk_map
 }
 
 fn display(map: &Map<char>) {
@@ -296,10 +177,10 @@ fn get_index(map: &Map<char>, target: char) -> Option<usize> {
     map.tiles.iter().position(|x| *x == target)
 }
 
-fn build_dijks(map: &Map<char>, keys: Vec<char>) -> Vec<(char, i64)> {
+fn build_dijks(map: &Map<char>, keys: Vec<char>, collected_keys: &Vec<char>) -> Vec<(char, i64)> {
     let mut r = vec![];
     for key in keys {
-        let d = dijkstra(map, '@', key);
+        let d = dijkstra(map, '@', key, collected_keys);
         if let Some(distance) = d {
             r.push((key, distance));
         }
@@ -307,9 +188,8 @@ fn build_dijks(map: &Map<char>, keys: Vec<char>) -> Vec<(char, i64)> {
     r
 }
 
-fn optimize(state: &State, steps: i64) -> Vec<(State, i64)> {
+fn optimize(map: &Map<char>, state: &State, steps: i64) -> Vec<(State, i64)> {
     let mut r = vec![];
-    let map = &state.map;
     let mut keys = vec![];
     for key in KEYS.chars() {
         if !state.keys.contains(&key) {
@@ -318,7 +198,7 @@ fn optimize(state: &State, steps: i64) -> Vec<(State, i64)> {
     }
 
     //println!("Building dijkstras");
-    let distances = build_dijks(map, keys);
+    let distances = build_dijks(map, keys, &state.keys);
     //println!("Keys: {:?}", distances);
 
     for (key, d) in distances {
@@ -335,7 +215,6 @@ fn optimize(state: &State, steps: i64) -> Vec<(State, i64)> {
         let new_state = State {
             keys: new_keys,
             i: new_index,
-            map: new_map,
         };
         r.push((new_state, steps+d));
     }
@@ -350,14 +229,14 @@ fn main() -> io::Result<()> {
 
     let map = parse_map(input);
     display(&map);
-    let initial_state = State{keys: vec![], i: get_index(&map, '@').unwrap(), map: map};
+    let initial_state = State{keys: vec![], i: get_index(&map, '@').unwrap()};
     let mut states: HashMap<State, i64> = HashMap::new();
     states.insert(initial_state, 0);
     loop {
         let mut changed_states: Vec<(State, i64)> = vec![];
         for (state, steps) in &states {
             //states.remove(state);
-            let new_states = optimize(state, *steps);
+            let new_states = optimize(&map, state, *steps);
             for (new_state, new_steps) in new_states {
                 changed_states.push((new_state, new_steps));
             }
