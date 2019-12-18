@@ -225,6 +225,7 @@ fn fast_neighbours(
     map: &Map<char>,
     state: &State,
     d_maps: &HashMap<char, Map<(i64, Vec<char>)>>,
+    key_map: &HashMap<char, usize>
 ) -> Vec<(State, i64)> {
     let mut r = vec![];
     let mut keys = vec![];
@@ -234,15 +235,15 @@ fn fast_neighbours(
         }
     }
 
-    for key in &keys {
+    for &key in &keys {
         let distances = d_maps.get(&key).unwrap();
         for (i, robot) in state.is.iter().enumerate() {
             if is_reachable(&map, &distances, *robot, &state.keys) {
-                let new_index = get_index(&map, *key).unwrap();
+                let new_index = key_map.get(&key).unwrap();
                 let mut new_keys = state.keys.clone();
-                new_keys.push(*key);
+                new_keys.push(key);
                 let mut new_is = state.is;
-                new_is[i] = new_index;
+                new_is[i] = *new_index;
                 let new_state = State {
                     keys: new_keys,
                     is: new_is,
@@ -272,12 +273,16 @@ fn main() -> io::Result<()> {
     let mut lowest_path = vec![];
     let mut lowest_cost = std::i64::MAX;
     let distance_maps = build_dijkstra_maps(&map, KEYS.chars().collect());
+    let mut key_map = HashMap::new();
+    for key in KEYS.chars() {
+        key_map.insert(key, get_index(&map, key).unwrap());
+    }
     while let Some(Vertex(cost, state)) = to_visit.pop() {
         println!("Cost: {:?}, Keys: {:?}", cost, state.keys);
         if cost > lowest_cost {
             break;
         }
-        let neighbours = fast_neighbours(&map, &state, &distance_maps);
+        let neighbours = fast_neighbours(&map, &state, &distance_maps, &key_map);
         for (n, new_cost) in neighbours {
             //println!("New cost: {} to {:?}", new_cost, n);
             let new_distance = cost + new_cost;
