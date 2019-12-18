@@ -1,14 +1,34 @@
+use std::collections::BinaryHeap;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::prelude::*;
-use std::collections::HashMap;
-use std::collections::BinaryHeap;
+
+use std::cmp::Ordering;
 
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz";
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Eq, Clone)]
 struct State {
     keys: Vec<char>, // Collected keys
-    i: usize, // Position in the map vector
+    i: usize,        // Position in the map vector
+}
+impl PartialEq for State {
+    fn eq(&self, other: &State) -> bool {
+        let mut self_sorted = self.keys.clone();
+        let mut other_sorted = other.keys.clone();
+        self_sorted.sort();
+        other_sorted.sort();
+        self_sorted == other_sorted && self.i == other.i
+    }
+}
+impl Hash for State {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let mut sorted = self.keys.clone();
+        sorted.sort();
+        sorted.hash(state);
+        self.i.hash(state);
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -67,16 +87,6 @@ fn get_neighbours(map: &Map<i64>, i: usize) -> Neighbours {
     r
 }
 
-fn get_neighbour_list(n: Neighbours) -> Vec<(i64, usize)> {
-    let n_vec = vec![n.north, n.south, n.east, n.west];
-    n_vec
-        .iter()
-        .filter_map(|x| match x {
-            Some((v, i)) => Some((*v, *i)),
-            None => None,
-        }).collect()
-}
-
 fn is_wall(tile: char, keys: &Vec<char>) -> bool {
     if keys.contains(&tile.to_ascii_lowercase()) {
         false
@@ -87,19 +97,40 @@ fn is_wall(tile: char, keys: &Vec<char>) -> bool {
 
 fn neighbour_list(map: &Map<char>, i: usize, keys: &Vec<char>) -> Vec<usize> {
     let mut r = vec![];
-    if i > map.width && !is_wall(map.tiles[i - map.width], keys){
+    if i > map.width && !is_wall(map.tiles[i - map.width], keys) {
         r.push(i - map.width);
     }
     if i < map.tiles.len() - map.width && !is_wall(map.tiles[i + map.width], keys) {
         r.push(i + map.width);
     }
-    if i % map.width > 0 && !is_wall(map.tiles[i - 1], keys){
+    if i % map.width > 0 && !is_wall(map.tiles[i - 1], keys) {
         r.push(i - 1);
     }
-    if i % map.width < map.width - 1 && !is_wall(map.tiles[i + 1], keys){
+    if i % map.width < map.width - 1 && !is_wall(map.tiles[i + 1], keys) {
         r.push(i + 1);
     }
     r
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Vertex<T>(i64, T);
+impl<T> Ord for Vertex<T>
+where
+    T: PartialEq,
+    T: Eq,
+{
+    fn cmp(&self, other: &Vertex<T>) -> Ordering {
+        other.0.cmp(&self.0)
+    }
+}
+impl<T> PartialOrd for Vertex<T>
+where
+    T: PartialEq,
+    T: Eq,
+{
+    fn partial_cmp(&self, other: &Vertex<T>) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Option<i64> {
@@ -107,19 +138,21 @@ fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Opt
         return None;
     }
     let target_i = get_index(map, target).unwrap();
-    let mut to_visit: BinaryHeap<(usize, i64)> = BinaryHeap::new();
+    let mut to_visit: BinaryHeap<Vertex<usize>> = BinaryHeap::new();
     let mut distances = HashMap::new();
     let i = get_index(map, start).unwrap();
-    to_visit.push((i, 0));
+    to_visit.push(Vertex(0, i));
     distances.insert(i, 0);
-    while let Some((i, cost)) = to_visit.pop() {
+    while let Some(Vertex(cost, i)) = to_visit.pop() {
         let neighbours = neighbour_list(map, i, keys);
         for n in neighbours {
             let new_distance = cost + 1;
-            let is_shorter = distances.get(&n).map_or(true, |&current| new_distance < current);
+            let is_shorter = distances
+                .get(&n)
+                .map_or(true, |&current| new_distance < current);
             if is_shorter {
                 distances.insert(n, new_distance);
-                to_visit.push((n, new_distance));
+                to_visit.push(Vertex(new_distance, n));
             }
         }
         if let Some(d) = distances.get(&target_i) {
@@ -132,7 +165,7 @@ fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Opt
 fn display(map: &Map<char>) {
     for y in 0..map.height {
         for x in 0..map.width {
-            let mut c = map.tiles[y*map.width + x];
+            let mut c = map.tiles[y * map.width + x];
             print!("{}", c);
         }
         println!();
@@ -156,7 +189,7 @@ fn parse_map(input: String) -> Map<char> {
     let mut height = 0;
     let mut tiles = vec![];
     for c in input.chars() {
-        if c =='\n' {
+        if c == '\n' {
             height += 1;
             continue;
         }
@@ -165,7 +198,7 @@ fn parse_map(input: String) -> Map<char> {
     Map {
         width: width,
         height: height,
-        tiles: tiles
+        tiles: tiles,
     }
 }
 
@@ -188,9 +221,13 @@ fn build_dijks(map: &Map<char>, keys: Vec<char>, collected_keys: &Vec<char>) -> 
     r
 }
 
-fn optimize(map: &Map<char>, state: &State, steps: i64) -> Vec<(State, i64)> {
+fn optimize(map: &Map<char>, state: &State) -> Vec<(State, i64)> {
     let mut r = vec![];
     let mut keys = vec![];
+    let mut map = map.clone();
+    let i = get_index(&map, '@').unwrap();
+    map.tiles[i] = '.';
+    map.tiles[state.i] = '@';
     for key in KEYS.chars() {
         if !state.keys.contains(&key) {
             keys.push(key);
@@ -198,25 +235,28 @@ fn optimize(map: &Map<char>, state: &State, steps: i64) -> Vec<(State, i64)> {
     }
 
     //println!("Building dijkstras");
-    let distances = build_dijks(map, keys, &state.keys);
+    let distances = build_dijks(&map, keys, &state.keys);
     //println!("Keys: {:?}", distances);
 
     for (key, d) in distances {
-        let new_index = get_index(map, key).unwrap();
+        let new_index = get_index(&map, key).unwrap();
         let mut new_keys = state.keys.clone();
         new_keys.push(key);
-        new_keys.sort();
+        //new_keys.sort();
         let mut new_map = map.clone();
         let door = key.to_ascii_uppercase();
-        let door_index = get_index(map, door).unwrap();
+        let door_index = get_index(&map, door);
         new_map.tiles[new_index] = '@';
-        new_map.tiles[door_index] = '.';
+        match door_index {
+            Some(i) => new_map.tiles[i] = '.',
+            _ => {}
+        }
         new_map.tiles[state.i] = '.';
         let new_state = State {
             keys: new_keys,
             i: new_index,
         };
-        r.push((new_state, steps+d));
+        r.push((new_state, d));
     }
     //pause();
 
@@ -229,42 +269,47 @@ fn main() -> io::Result<()> {
 
     let map = parse_map(input);
     display(&map);
-    let initial_state = State{keys: vec![], i: get_index(&map, '@').unwrap()};
-    let mut states: HashMap<State, i64> = HashMap::new();
-    states.insert(initial_state, 0);
-    loop {
-        let mut changed_states: Vec<(State, i64)> = vec![];
-        for (state, steps) in &states {
-            //states.remove(state);
-            let new_states = optimize(&map, state, *steps);
-            for (new_state, new_steps) in new_states {
-                changed_states.push((new_state, new_steps));
-            }
-        }
-        if changed_states.is_empty() {
+    let initial_state = State {
+        keys: vec![],
+        i: get_index(&map, '@').unwrap(),
+    };
+    let mut distances: HashMap<State, i64> = HashMap::new();
+    let mut to_visit: BinaryHeap<Vertex<State>> = BinaryHeap::new();
+    to_visit.push(Vertex(0, initial_state));
+    let num_keys = 26;
+    let mut lowest_path = vec![];
+    let mut lowest_cost = std::i64::MAX;
+    'outer: while let Some(Vertex(cost, state)) = to_visit.pop() {
+        println!("Cost: {:?}, Keys: {:?}", cost, state.keys);
+        if cost > lowest_cost {
             break;
         }
-        states = HashMap::new();
-        for (state, steps) in changed_states {
-            let old = states.insert(state.clone(), steps);
-            match old {
-                Some(old_steps) => {
-                    if old_steps < steps {
-                        //println!("Keys: {:?} Not replacing {:?} with {:?}", state.keys, old_steps, steps);
-                        //println!("Not the best way!");
-                        states.insert(state, old_steps);
+        let neighbours = optimize(&map, &state);
+        for (n, new_cost) in neighbours {
+            //println!("New cost: {} to {:?}", new_cost, n);
+            let new_distance = cost + new_cost;
+            //println!("State: {:?}", n.keys);
+            //println!("Current: {:?}", distances.get(&n));
+            //println!("New: {:?}", new_distance);
+            let is_shorter = distances
+                .get(&n)
+                .map_or(true, |&current| new_distance < current);
+            //pause();
+            if is_shorter {
+                distances.insert(n.clone(), new_distance);
+                //println!("Pushing {} steps to {:?}", new_distance, n);
+                if n.keys.len() == num_keys {
+                    if new_distance < lowest_cost {
+                        lowest_cost = new_distance;
+                        lowest_path = n.keys.clone();
                     }
                 }
-                _ => {}
+                to_visit.push(Vertex(new_distance, n));
             }
         }
-        //let display_values: Vec<Vec<char>> = states.keys().map(|x| x.keys.clone()).collect();
-        println!("States: {:?}", states.len());
-        //pause();
     }
     println!("DONE");
-    let display_values: Vec<(Vec<char>, i64)> = states.keys().map(|x| (x.keys.clone(), *states.get(x).unwrap())).collect();
-    println!("States: {:?}", display_values);
+    println!("{} steps to {:?}", lowest_cost, lowest_path);
     println!("Hello, world!");
     Ok(())
 }
