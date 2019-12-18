@@ -194,9 +194,13 @@ fn neighbour_list(map: &Map<char>, i: usize) -> Vec<usize> {
 }
 
 fn dijkstra(map: &Map<char>, start: char, target: char) -> Option<i64> {
+    if let None = get_index(map, target) {
+        return None;
+    }
+    let target_i = get_index(map, target).unwrap();
     let mut to_visit: BinaryHeap<(usize, i64)> = BinaryHeap::new();
     let mut distances = HashMap::new();
-    let i = get_index(map, start);
+    let i = get_index(map, start).unwrap();
     to_visit.push((i, 0));
     distances.insert(i, 0);
     while let Some((i, cost)) = to_visit.pop() {
@@ -209,8 +213,10 @@ fn dijkstra(map: &Map<char>, start: char, target: char) -> Option<i64> {
                 to_visit.push((n, new_distance));
             }
         }
+        if let Some(d) = distances.get(&target_i) {
+            return Some(*d);
+        }
     }
-    let target_i = get_index(map, target);
     distances.get(&target_i).map(|x| *x)
 }
 
@@ -290,21 +296,9 @@ fn get_index(map: &Map<char>, target: char) -> Option<usize> {
     map.tiles.iter().position(|x| *x == target)
 }
 
-fn build_dijk_maps(map: &Map<char>) -> Vec<(char, Map<i64>)> {
+fn build_dijks(map: &Map<char>, keys: Vec<char>) -> Vec<(char, i64)> {
     let mut r = vec![];
-    for key in KEYS.chars() {
-        let m = build_map(map, key);
-        let i = get_index(map, '@');
-        if m.tiles[i] < std::i64::MAX {
-            r.push((key, m));
-        }
-    }
-    r
-}
-
-fn build_dijks(map: &Map<char>) -> Vec<(char, i64)> {
-    let mut r = vec![];
-    for key in KEYS.chars() {
+    for key in keys {
         let d = dijkstra(map, '@', key);
         if let Some(distance) = d {
             r.push((key, distance));
@@ -316,18 +310,25 @@ fn build_dijks(map: &Map<char>) -> Vec<(char, i64)> {
 fn optimize(state: &State, steps: i64) -> Vec<(State, i64)> {
     let mut r = vec![];
     let map = &state.map;
+    let mut keys = vec![];
+    for key in KEYS.chars() {
+        if !state.keys.contains(&key) {
+            keys.push(key);
+        }
+    }
 
-    let distances = build_dijks(map);
-    println!("Keys: {:?}", distances);
+    //println!("Building dijkstras");
+    let distances = build_dijks(map, keys);
+    //println!("Keys: {:?}", distances);
 
     for (key, d) in distances {
-        let new_index = get_index(map, key);
+        let new_index = get_index(map, key).unwrap();
         let mut new_keys = state.keys.clone();
         new_keys.push(key);
         new_keys.sort();
         let mut new_map = map.clone();
         let door = key.to_ascii_uppercase();
-        let door_index = get_index(map, door);
+        let door_index = get_index(map, door).unwrap();
         new_map.tiles[new_index] = '@';
         new_map.tiles[door_index] = '.';
         new_map.tiles[state.i] = '.';
@@ -338,7 +339,7 @@ fn optimize(state: &State, steps: i64) -> Vec<(State, i64)> {
         };
         r.push((new_state, steps+d));
     }
-    pause();
+    //pause();
 
     r
 }
@@ -349,7 +350,7 @@ fn main() -> io::Result<()> {
 
     let map = parse_map(input);
     display(&map);
-    let initial_state = State{keys: vec![], i: get_index(&map, '@'), map: map};
+    let initial_state = State{keys: vec![], i: get_index(&map, '@').unwrap(), map: map};
     let mut states: HashMap<State, i64> = HashMap::new();
     states.insert(initial_state, 0);
     loop {
@@ -370,20 +371,20 @@ fn main() -> io::Result<()> {
             match old {
                 Some(old_steps) => {
                     if old_steps < steps {
-                        println!("Keys: {:?} Not replacing {:?} with {:?}", state.keys, old_steps, steps);
-                        println!("Not the best way!");
+                        //println!("Keys: {:?} Not replacing {:?} with {:?}", state.keys, old_steps, steps);
+                        //println!("Not the best way!");
                         states.insert(state, old_steps);
                     }
                 }
                 _ => {}
             }
         }
-        let display_values: Vec<Vec<char>> = states.keys().map(|x| x.keys.clone()).collect();
-        println!("States: {:?}", display_values);
+        //let display_values: Vec<Vec<char>> = states.keys().map(|x| x.keys.clone()).collect();
+        println!("States: {:?}", states.len());
         //pause();
     }
     println!("DONE");
-    let display_values: Vec<Vec<char>> = states.keys().map(|x| x.keys.clone()).collect();
+    let display_values: Vec<(Vec<char>, i64)> = states.keys().map(|x| (x.keys.clone(), *states.get(x).unwrap())).collect();
     println!("States: {:?}", display_values);
     println!("Hello, world!");
     Ok(())
