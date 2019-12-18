@@ -235,9 +235,6 @@ fn fast_neighbours(
     }
 
     for key in &keys {
-        if let None = get_index(&map, *key) {
-            continue;
-        }
         let distances = d_maps.get(&key).unwrap();
         for (i, robot) in state.is.iter().enumerate() {
             if is_reachable(&map, &distances, *robot, &state.keys) {
@@ -251,6 +248,7 @@ fn fast_neighbours(
                     is: new_is,
                 };
                 r.push((new_state, distances.tiles[*robot].0));
+                break;
             }
         }
     }
