@@ -228,14 +228,6 @@ fn fast_neighbours(
 ) -> Vec<(State, i64)> {
     let mut r = vec![];
     let mut keys = vec![];
-    let mut map = map.clone();
-    let is = get_robots(&map);
-    for &robot in &is {
-        map.tiles[robot] = '.';
-    }
-    for &robot in &state.is {
-        map.tiles[robot] = '@';
-    }
     for key in KEYS.chars() {
         if !state.keys.contains(&key) {
             keys.push(key);
