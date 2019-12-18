@@ -12,7 +12,7 @@ const DOORS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 #[derive(Debug, Eq, Clone)]
 struct State {
     keys: Vec<char>, // Collected keys
-    i: usize,        // Position in the map vector
+    is: [usize; 4],  // Position in the map vector
 }
 impl PartialEq for State {
     fn eq(&self, other: &State) -> bool {
@@ -20,7 +20,7 @@ impl PartialEq for State {
         let mut other_sorted = other.keys.clone();
         self_sorted.sort();
         other_sorted.sort();
-        self_sorted == other_sorted && self.i == other.i
+        self_sorted == other_sorted && self.is == other.is
     }
 }
 impl Hash for State {
@@ -28,7 +28,7 @@ impl Hash for State {
         let mut sorted = self.keys.clone();
         sorted.sort();
         sorted.hash(state);
-        self.i.hash(state);
+        self.is.hash(state);
     }
 }
 
@@ -107,7 +107,7 @@ where
 
 fn build_dijkstra_map(map: &Map<char>, key: char) -> Map<(i64, Vec<char>)> {
     let mut to_visit: BinaryHeap<Vertex<usize>> = BinaryHeap::new();
-    let mut visited: Vec<(i64, Vec<char>)> = vec![(0, vec![]); map.tiles.len()];
+    let mut visited: Vec<(i64, Vec<char>)> = vec![(std::i64::MAX, vec![]); map.tiles.len()];
     let mut distances = HashMap::new();
     let i = get_index(map, key).unwrap();
     to_visit.push(Vertex(0, i));
@@ -192,13 +192,32 @@ fn get_index(map: &Map<char>, target: char) -> Option<usize> {
     map.tiles.iter().position(|x| *x == target)
 }
 
+fn get_robots(map: &Map<char>) -> [usize; 4] {
+    let mut r = [0; 4];
+    let mut r_i = 0;
+    for (i, &tile) in map.tiles.iter().enumerate() {
+        if tile == '@' {
+            r[r_i] = i;
+            r_i += 1;
+        }
+    }
+    r
+}
+
 fn is_reachable(
     map: &Map<char>,
     d_map: &Map<(i64, Vec<char>)>,
     start: usize,
     keys: &Vec<char>,
 ) -> bool {
-    let needed_keys: Vec<char> = d_map.tiles[start].1.iter().map(|&x| x.to_ascii_lowercase()).collect();
+    if d_map.tiles[start].0 == std::i64::MAX {
+        return false
+    }
+    let needed_keys: Vec<char> = d_map.tiles[start]
+        .1
+        .iter()
+        .map(|&x| x.to_ascii_lowercase())
+        .collect();
     needed_keys.iter().all(|x| keys.contains(x))
 }
 
@@ -210,9 +229,13 @@ fn fast_neighbours(
     let mut r = vec![];
     let mut keys = vec![];
     let mut map = map.clone();
-    let i = get_index(&map, '@').unwrap();
-    map.tiles[i] = '.';
-    map.tiles[state.i] = '@';
+    let is = get_robots(&map);
+    for &robot in &is {
+        map.tiles[robot] = '.';
+    }
+    for &robot in &state.is {
+        map.tiles[robot] = '@';
+    }
     for key in KEYS.chars() {
         if !state.keys.contains(&key) {
             keys.push(key);
@@ -225,32 +248,36 @@ fn fast_neighbours(
         }
         let key_index = get_index(&map, *key).unwrap();
         let distances = d_maps.get(&key).unwrap();
-        if is_reachable(&map, &distances, state.i, &state.keys) {
-            let new_index = get_index(&map, *key).unwrap();
-            let mut new_keys = state.keys.clone();
-            new_keys.push(*key);
-            //new_keys.sort();
-            let mut new_map = map.clone();
-            let door = key.to_ascii_uppercase();
-            let door_index = get_index(&map, door);
-            new_map.tiles[new_index] = '@';
-            match door_index {
-                Some(i) => new_map.tiles[i] = '.',
-                _ => {}
+        for (i, robot) in state.is.iter().enumerate() {
+            if is_reachable(&map, &distances, *robot, &state.keys) {
+                let new_index = get_index(&map, *key).unwrap();
+                let mut new_keys = state.keys.clone();
+                new_keys.push(*key);
+                //new_keys.sort();
+                let mut new_map = map.clone();
+                let door = key.to_ascii_uppercase();
+                let door_index = get_index(&map, door);
+                new_map.tiles[new_index] = '@';
+                match door_index {
+                    Some(i) => new_map.tiles[i] = '.',
+                    _ => {}
+                }
+                let mut new_is = state.is;
+                new_is[i] = new_index;
+                new_map.tiles[*robot] = '.';
+                let new_state = State {
+                    keys: new_keys,
+                    is: new_is,
+                };
+                r.push((new_state, distances.tiles[*robot].0));
             }
-            new_map.tiles[state.i] = '.';
-            let new_state = State {
-                keys: new_keys,
-                i: new_index,
-            };
-            r.push((new_state, distances.tiles[state.i].0));
         }
     }
     r
 }
 
 fn main() -> io::Result<()> {
-    let file = "./resources/input";
+    let file = "./resources/input_2";
     let num_keys = 26;
     let input = std::fs::read_to_string(file)?;
 
@@ -258,7 +285,7 @@ fn main() -> io::Result<()> {
     display(&map);
     let initial_state = State {
         keys: vec![],
-        i: get_index(&map, '@').unwrap(),
+        is: get_robots(&map),
     };
     let mut distances: HashMap<State, i64> = HashMap::new();
     let mut to_visit: BinaryHeap<Vertex<State>> = BinaryHeap::new();
