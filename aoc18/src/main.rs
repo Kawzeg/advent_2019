@@ -108,7 +108,7 @@ where
 fn build_dijkstra_map(map: &Map<char>, key: char) -> Map<(i64, Vec<char>)> {
     let mut to_visit: BinaryHeap<Vertex<usize>> = BinaryHeap::new();
     let mut visited: Vec<(i64, Vec<char>)> = vec![(std::i64::MAX, vec![]); map.tiles.len()];
-    let mut distances = HashMap::new();
+    let mut distances: HashMap<usize, i64> = HashMap::new();
     let i = get_index(map, key).unwrap();
     to_visit.push(Vertex(0, i));
     distances.insert(i, 0);
@@ -205,7 +205,6 @@ fn get_robots(map: &Map<char>) -> [usize; 4] {
 }
 
 fn is_reachable(
-    map: &Map<char>,
     d_map: &Map<(i64, Vec<char>)>,
     start: usize,
     keys: &Vec<char>,
@@ -222,7 +221,6 @@ fn is_reachable(
 }
 
 fn fast_neighbours(
-    map: &Map<char>,
     state: &State,
     d_maps: &HashMap<char, Map<(i64, Vec<char>)>>,
     key_map: &HashMap<char, usize>
@@ -238,7 +236,7 @@ fn fast_neighbours(
     for &key in &keys {
         let distances = d_maps.get(&key).unwrap();
         for (i, robot) in state.is.iter().enumerate() {
-            if is_reachable(&map, &distances, *robot, &state.keys) {
+            if is_reachable(&distances, *robot, &state.keys) {
                 let new_index = key_map.get(&key).unwrap();
                 let mut new_keys = state.keys.clone();
                 new_keys.push(key);
@@ -267,7 +265,7 @@ fn main() -> io::Result<()> {
         keys: vec![],
         is: get_robots(&map),
     };
-    let mut distances: HashMap<State, i64> = HashMap::new();
+    let mut distances = HashMap::new();
     let mut to_visit: BinaryHeap<Vertex<State>> = BinaryHeap::new();
     to_visit.push(Vertex(0, initial_state));
     let mut lowest_path = vec![];
@@ -282,20 +280,14 @@ fn main() -> io::Result<()> {
         if cost > lowest_cost {
             break;
         }
-        let neighbours = fast_neighbours(&map, &state, &distance_maps, &key_map);
+        let neighbours = fast_neighbours(&state, &distance_maps, &key_map);
         for (n, new_cost) in neighbours {
-            //println!("New cost: {} to {:?}", new_cost, n);
             let new_distance = cost + new_cost;
-            //println!("State: {:?}", n.keys);
-            //println!("Current: {:?}", distances.get(&n));
-            //println!("New: {:?}", new_distance);
             let is_shorter = distances
                 .get(&n)
                 .map_or(true, |&current| new_distance < current);
-            //pause();
             if is_shorter {
                 distances.insert(n.clone(), new_distance);
-                //println!("Pushing {} steps to {:?}", new_distance, n);
                 if n.keys.len() == num_keys {
                     if new_distance < lowest_cost {
                         lowest_cost = new_distance;
