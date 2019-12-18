@@ -246,25 +246,14 @@ fn fast_neighbours(
         if let None = get_index(&map, *key) {
             continue;
         }
-        let key_index = get_index(&map, *key).unwrap();
         let distances = d_maps.get(&key).unwrap();
         for (i, robot) in state.is.iter().enumerate() {
             if is_reachable(&map, &distances, *robot, &state.keys) {
                 let new_index = get_index(&map, *key).unwrap();
                 let mut new_keys = state.keys.clone();
                 new_keys.push(*key);
-                //new_keys.sort();
-                let mut new_map = map.clone();
-                let door = key.to_ascii_uppercase();
-                let door_index = get_index(&map, door);
-                new_map.tiles[new_index] = '@';
-                match door_index {
-                    Some(i) => new_map.tiles[i] = '.',
-                    _ => {}
-                }
                 let mut new_is = state.is;
                 new_is[i] = new_index;
-                new_map.tiles[*robot] = '.';
                 let new_state = State {
                     keys: new_keys,
                     is: new_is,
