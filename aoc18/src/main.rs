@@ -88,10 +88,12 @@ fn get_neighbours(map: &Map<i64>, i: usize) -> Neighbours {
 }
 
 fn is_wall(tile: char, keys: &Vec<char>) -> bool {
-    if keys.contains(&tile.to_ascii_lowercase()) {
+    if tile == '#' {
+        true
+    } else if keys.contains(&tile.to_ascii_lowercase()) {
         false
     } else {
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".contains(tile)
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(tile)
     }
 }
 
@@ -133,6 +135,44 @@ where
     }
 }
 
+fn build_dijkstra_map(map: &Map<char>, key: char) -> Map<i64> {
+    let mut to_visit: BinaryHeap<Vertex<usize>> = BinaryHeap::new();
+    let mut distances = HashMap::new();
+    let i = get_index(map, key).unwrap();
+    to_visit.push(Vertex(0, i));
+    distances.insert(i, 0);
+    while let Some(Vertex(cost, i)) = to_visit.pop() {
+        let neighbours = neighbour_list(map, i, &KEYS.chars().collect());
+        for n in neighbours {
+            let new_distance = cost + 1;
+            let is_shorter = distances
+                .get(&n)
+                .map_or(true, |&current| new_distance < current);
+            if is_shorter {
+                distances.insert(n, new_distance);
+                to_visit.push(Vertex(new_distance, n));
+            }
+        }
+    }
+    let mut tiles = vec![std::i64::MAX; map.tiles.len()];
+    for (i, cost) in distances {
+        tiles[i] = cost;
+    }
+    Map {
+        width: map.width,
+        height: map.height,
+        tiles: tiles,
+    }
+}
+
+fn build_dijkstra_maps(map: &Map<char>, keys: Vec<char>) -> Vec<Map<i64>> {
+    let mut r = vec![];
+    for key in keys {
+        r.push(build_dijkstra_map(map, key));
+    }
+    r
+}
+
 fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Option<i64> {
     if let None = get_index(map, target) {
         return None;
@@ -153,10 +193,10 @@ fn dijkstra(map: &Map<char>, start: char, target: char, keys: &Vec<char>) -> Opt
             if is_shorter {
                 distances.insert(n, new_distance);
                 to_visit.push(Vertex(new_distance, n));
+                if n == target_i {
+                    return Some(new_distance);
+                }
             }
-        }
-        if let Some(d) = distances.get(&target_i) {
-            return Some(*d);
         }
     }
     distances.get(&target_i).map(|x| *x)
