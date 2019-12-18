@@ -9,27 +9,10 @@ use std::cmp::Ordering;
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz";
 const DOORS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 struct State {
     keys: Vec<char>, // Collected keys
     is: [usize; 4],  // Position in the map vector
-}
-impl PartialEq for State {
-    fn eq(&self, other: &State) -> bool {
-        let mut self_sorted = self.keys.clone();
-        let mut other_sorted = other.keys.clone();
-        self_sorted.sort();
-        other_sorted.sort();
-        self_sorted == other_sorted && self.is == other.is
-    }
-}
-impl Hash for State {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut sorted = self.keys.clone();
-        sorted.sort();
-        sorted.hash(state);
-        self.is.hash(state);
-    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -240,6 +223,7 @@ fn fast_neighbours(
                 let new_index = key_map.get(&key).unwrap();
                 let mut new_keys = state.keys.clone();
                 new_keys.push(key);
+                new_keys.sort();
                 let mut new_is = state.is;
                 new_is[i] = *new_index;
                 let new_state = State {
@@ -276,7 +260,6 @@ fn main() -> io::Result<()> {
         key_map.insert(key, get_index(&map, key).unwrap());
     }
     while let Some(Vertex(cost, state)) = to_visit.pop() {
-        println!("Cost: {:?}, Keys: {:?}", cost, state.keys);
         if cost > lowest_cost {
             break;
         }
