@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::collections::BinaryHeap;
-use std::io;
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::collections::HashMap;
+use std::io;
 
 const ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -33,7 +33,7 @@ struct Map<T> {
     height: usize,
     default: T,
 }
-impl<T: Copy> Map<T> {
+impl<T> Map<T> {
     fn index_xy(&self, i: usize) -> (usize, usize) {
         let x = i % self.width;
         let y = i / self.width;
@@ -42,12 +42,12 @@ impl<T: Copy> Map<T> {
     fn xy_index(&self, x: usize, y: usize) -> usize {
         y * self.width + x
     }
-    fn get_at(&self, x: usize, y: usize) -> T {
+    fn get_at(&self, x: usize, y: usize) -> &T {
         let i = self.xy_index(x, y);
         if i >= self.tiles.len() {
-            self.default
+            &self.default
         } else {
-            self.tiles[i]
+            &self.tiles[i]
         }
     }
 }
@@ -67,7 +67,7 @@ fn find_floor(map: &Map<char>, x: usize, y: usize, w: usize, h: usize) -> (usize
         neighbours.push((x + w, y1));
     }
     for (x, y) in neighbours {
-        if map.get_at(x, y) == '.' {
+        if *map.get_at(x, y) == '.' {
             return (x, y);
         }
     }
@@ -80,11 +80,11 @@ fn find_portal(map: &Map<char>, id: &String) -> Vec<(usize, usize)> {
     let mut r = vec![];
     for x in 0..map.width {
         for y in 0..map.height {
-            let c = map.get_at(x, y);
+            let &c = map.get_at(x, y);
             if c == first {
-                if map.get_at(x + 1, y) == second {
+                if *map.get_at(x + 1, y) == second {
                     r.push(find_floor(map, x, y, 2, 1));
-                } else if map.get_at(x, y + 1) == second {
+                } else if *map.get_at(x, y + 1) == second {
                     r.push(find_floor(map, x, y, 1, 2));
                 }
             }
@@ -108,7 +108,7 @@ fn get_neighbours(
         potentials.push((x, y - 1));
     }
     for (x, y) in potentials {
-        let c = map.get_at(x, y);
+        let &c = map.get_at(x, y);
         if c == '.' {
             r.push(map.xy_index(x, y));
         }
@@ -156,7 +156,7 @@ fn parse_map(input: String) -> (Map<Vec<usize>>, usize, usize) {
                 println!("START");
                 println!("{:?}", get_neighbours(&char_map, x, y, &portals));
             }
-            let c = char_map.get_at(x, y);
+            let &c = char_map.get_at(x, y);
             if c == '.' {
                 let neighbours = get_neighbours(&char_map, x, y, &portals);
                 tiles.push(neighbours);
@@ -184,23 +184,69 @@ fn parse_map(input: String) -> (Map<Vec<usize>>, usize, usize) {
     )
 }
 
+fn is_outer(x: usize, y: usize, width: usize, height: usize) -> bool {
+    let r = x == 2 || y == 2 || 
+    x == width - 3 ||
+    y == height - 3;
+    println!(
+        "Checking ({},{}) w={}, h={}, for outer = {}",
+        x, y, width, height, r
+    );
+    r
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+struct State {
+    n: usize,
+    inception: usize,
+}
+
 fn solve(map: &Map<Vec<usize>>, start: usize, goal: usize) -> i64 {
     let mut to_visit = BinaryHeap::new();
-    to_visit.push(Vertex(0, start));
+    to_visit.push(Vertex(
+        0,
+        State {
+            n: start,
+            inception: 0,
+        },
+    ));
     let mut distances = HashMap::new();
-    while let Some(Vertex(cost, i)) = to_visit.pop() {
+    while let Some(Vertex(cost, state)) = to_visit.pop() {
+        println!("{}: Visiting {:?}", cost, state);
+        let i = state.n;
+        let inception = state.inception;
         let neighbours = &map.tiles[i];
         for &n in neighbours {
-            if n == goal {
+            if n == goal && inception == 0 {
                 return cost + 1;
             }
             let new_cost = cost + 1;
+            let new_inception;
+            let dist = (n as isize - state.n as isize).abs() as usize;
+            if !(dist == 1 || dist == map.width) {
+                // went through portal
+                let (x, y) = map.index_xy(i);
+                if is_outer(x, y, map.width, map.height) {
+                    if inception == 0 {
+                        continue;
+                    }
+                    new_inception = inception - 1;
+                } else {
+                    new_inception = inception + 1;
+                }
+            } else {
+                new_inception = inception;
+            }
+            let new_state = State {
+                n: n,
+                inception: new_inception,
+            };
             let is_shorter = distances
-            .get(&n)
-            .map_or(true, |&current| new_cost < current);
+                .get(&new_state)
+                .map_or(true, |&current| new_cost < current);
             if is_shorter {
-                distances.insert(n, new_cost);
-                to_visit.push(Vertex(new_cost, n));
+                distances.insert(new_state, new_cost);
+                to_visit.push(Vertex(new_cost, new_state));
             }
         }
     }
