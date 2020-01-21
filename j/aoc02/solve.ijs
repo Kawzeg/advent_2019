@@ -12,7 +12,7 @@ halt =: % NB. [(_2 Z: 1)
 opcodes =: add`mult`halt
 opselect =: (1 2 99) i. ]
 
-op =: (add`mult`halt){~(1 2 99 i.])
+get_op =: (add`mult`halt){~(1 2 99 i.])
 NB. ints x arg y -> value of ints at index at index y+x
 arg=: adverb : '({{])~m&+'
 
@@ -21,11 +21,13 @@ NB. y is the instruction pointer
 NB. ints run 0
 
 run =: dyad : 0
+op=.get_op y}x
 a=.x 1 arg y
 b=.x 2 arg y
 at=.x 3 arg y
-r =. a (op y}x)`:0 b
+r =. a op`:0 b
 r at} x
 )
 
 ints run 0
+
